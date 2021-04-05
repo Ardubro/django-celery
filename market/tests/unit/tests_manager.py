@@ -198,3 +198,19 @@ class TestClassManager(TestCase):
         self.subscription.save()
 
         self.assertEqual(models.Subscription.objects.due().count(), 0)
+
+    def test_is_in_unused_for_a_week(self):
+        self.assertNotIn(self.subscription, models.Subscription.objects.unused_for_a_week())
+
+        with freeze_time('2032-11-08'):  # 1 week forward:
+            self.assertIn(self.subscription, models.Subscription.objects.unused_for_a_week())
+
+    def test_is_not_in_unused_for_a_week_if_taken_a_class_recently(self):
+        with freeze_time('2032-11-08'):  # 1 week forward
+            self.subscription.last_taken_lesson_date = self.tzdatetime(2032, 11, 7, 14, 0)  # 6th day
+            self.subscription.save()
+            self.assertNotIn(self.subscription, models.Subscription.objects.unused_for_a_week())
+
+            self.subscription.last_taken_lesson_date = None
+            self.subscription.save()
+            self.assertIn(self.subscription, models.Subscription.objects.unused_for_a_week())

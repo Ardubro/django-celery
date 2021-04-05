@@ -1,0 +1,14 @@
+{% extends "mail_templated/base.tpl" %}
+{% load humanize %}
+
+{% block subject %}
+{{ c.customer.first_name | capfirst }}, your paid subscription is not used for a week.
+{% endblock %}
+
+{% block body %}
+Dear {{ c.customer.first_name | capfirst }},
+
+You purchased {{ c.name_for_user }}, but haven't taken or scheduled any lessons for the past week, jump back in!
+
+{% include 'mailer/_signature.html' %}
+{% endblock %}
