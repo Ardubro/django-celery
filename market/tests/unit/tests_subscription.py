@@ -73,3 +73,23 @@ class TestSubscriptionUnit(TestCase):
         self.s.update_first_lesson_date()
         self.s.refresh_from_db()
         self.assertEqual(self.s.first_lesson_date, self.tzdatetime(2032, 12, 5, 13, 33))  # should be taken from the first class, not from the second
+
+    def test_unused_subscription_notification_date_cleared_when_class_taken(self):
+        self.s.unused_subscription_notification_date = self.tzdatetime(2032, 12, 4, 13, 33)
+
+        c = self.s.classes.first()
+        self._schedule(c, self.tzdatetime(2032, 12, 5, 13, 33))
+
+        self.assertTrue(self.s.unused_subscription_notification_date is not None)
+
+        c.mark_as_fully_used()
+        self.assertTrue(self.s.unused_subscription_notification_date is None)
+
+    def test_update_last_taken_lesson_date(self):
+        c = self.s.classes.first()
+        self._schedule(c, self.tzdatetime(2032, 12, 5, 13, 33))
+
+        self.assertTrue(self.s.last_taken_lesson_date is None)
+
+        c.mark_as_fully_used()
+        self.assertTrue(self.s.last_taken_lesson_date == c.timeline.start)

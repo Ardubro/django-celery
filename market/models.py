@@ -82,6 +82,18 @@ class SubscriptionManager(ProductContainerManager):
             Q(first_lesson_date__lte=edge_date) | Q(first_lesson_date__isnull=True, buy_date__lte=edge_date)
         )
 
+    def unused_for_a_week(self):
+        """
+        Find active subscriptions that are not used for taking classes for a week.
+        """
+        week_ago = timezone.now() - timedelta(weeks=1)
+
+        return self.get_queryset().filter(
+            is_fully_used=False,
+        ).filter(
+            Q(last_taken_lesson_date__lte=week_ago) | Q(last_taken_lesson_date__isnull=True, buy_date__lte=week_ago)
+        )
+
 
 class Subscription(ProductContainer):
     """
@@ -103,6 +115,8 @@ class Subscription(ProductContainer):
     duration = models.DurationField(editable=False)  # every subscription cares a duration field, taken from its product
 
     first_lesson_date = models.DateTimeField('Date of the first lesson', editable=False, null=True)
+    last_taken_lesson_date = models.DateTimeField('Date of the last taken lesson', editable=False, null=True)
+    unused_subscription_notification_date = models.DateTimeField('Date the last notification was sent', editable=False, null=True)
 
     def __str__(self):
         return self.name_for_user
@@ -175,6 +189,32 @@ class Subscription(ProductContainer):
             if first_class:
                 self.first_lesson_date = first_class.timeline.start
                 self.save()
+
+    def update_last_taken_lesson_date(self):
+        """
+        Set the last taken lesson date
+        """
+        last_class = self.classes.filter(timeline__isnull=False).order_by('timeline__start').last()
+        if last_class:
+            self.last_taken_lesson_date = last_class.timeline.start
+            self.save()
+
+    def update_unused_subscription_notification_date(self):
+        """
+        Update notification date after a notification was sent.
+        """
+        self.unused_subscription_notification_date = timezone.now()
+        self.save()
+
+    def clear_unused_subscription_notification_date(self):
+        """
+        If a class was taken, clear unused_subscription_notification_date.
+        Now, if previously notified customer takes a class and disappears for a week again,
+        we notify him again.
+        """
+        if self.unused_subscription_notification_date:
+            self.unused_subscription_notification_date = None
+            self.save()
 
     def class_status(self):
         """
@@ -392,6 +432,8 @@ class Class(ProductContainer):
         if self.subscription:
             self.subscription.update_first_lesson_date()
             self.subscription.check_is_fully_finished()
+            self.subscription.update_last_taken_lesson_date()
+            self.subscription.clear_unused_subscription_notification_date()
 
     def _save_scheduled(self, *args, **kwargs):
         """
